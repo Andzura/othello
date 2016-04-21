@@ -3,10 +3,12 @@ package com.andzura.othello.statemanager.states;
 import java.awt.Dimension;
 import java.awt.FlowLayout;
 import java.awt.GridLayout;
+import java.util.ArrayDeque;
 
 import javax.swing.JPanel;
 import javax.swing.border.EmptyBorder;
 
+import com.andzura.othello.controller.PlayController;
 import com.andzura.othello.graphics.Case;
 import com.andzura.othello.main.Mouse;
 import com.andzura.othello.model.Board;
@@ -19,6 +21,7 @@ public class PlayState extends State{
 	private JPanel gameBoard;
 	private boolean updateNeeded = true;
 	private int playerTurn = 2;
+	private PlayController controller;
 	
 	public PlayState(StateManager manager) {
 		super(manager);
@@ -33,6 +36,7 @@ public class PlayState extends State{
 				};
 		gameBoard.addMouseListener(new Mouse());
 		board = new Board(8,8);
+		controller = new PlayController(false, board);
 		cases = new Case[8*8];
 	}
 	
@@ -56,9 +60,10 @@ public class PlayState extends State{
 		if(updateNeeded){
 			boolean canPlay = false;
 			updateNeeded = false;
+			long start = System.nanoTime();
 			for(int i = 0; i < 8; i++){
 				for(int j = 0; j < 8; j++){
-					if(board.isPlayable(i, j, playerTurn)){
+					if(controller.isPlayable(i, j)){
 						cases[i+j*8].select();
 						canPlay = true;
 					}else{
@@ -66,17 +71,21 @@ public class PlayState extends State{
 					}
 				}
 			}
+			long end = System.nanoTime();
+			float time = (end - start);
+			System.out.println("playable square computed in " + time + "ns.");
 			if(!canPlay){
 				updateNeeded = true;
-				playerTurn = playerTurn%2 + 1;
+				controller.changePlayer();
 			}
 			this.render();
 		}
 		if(Mouse.getClick()){
 			updateNeeded = true;
-			if(board.play(Mouse.getX()/(screen.getWidth()/8), Mouse.getY()/(screen.getHeight()/8), playerTurn)){
-				playerTurn = playerTurn%2 + 1;
-			}
+			int x = Mouse.getX()/(gameBoard.getWidth()/8);
+			int y = Mouse.getY()/(gameBoard.getHeight()/8);
+			controller.play(x, y);
+
 		}
 		
 	}

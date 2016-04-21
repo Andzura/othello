@@ -41,6 +41,9 @@ public class Board {
 		return board[i];
 	}
 	
+	public int[] getBoard(){
+		return board.clone();
+	}
 	public void setSquareContent(int x, int y, int content){
 		if(x >= 0 && x < width){
 			if(y >= 0 && y < height)
