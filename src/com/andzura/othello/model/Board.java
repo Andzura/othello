@@ -4,13 +4,13 @@ package com.andzura.othello.model;
 
 public class Board {
 	//WHITE  = 1 BLACK = 2
-	private int[] board;
+	private byte[] board;
 	private int height, width;
 	
 	public Board(int height, int width){
 		this.height = height;
 		this.width = width;
-		board = new int[height * width];
+		board = new byte[height * width];
 		
 		for(int i = 0; i < height; i++){
 			for(int j = 0; j < width; j++){
@@ -41,17 +41,17 @@ public class Board {
 		return board[i];
 	}
 	
-	public int[] getBoard(){
+	public byte[] getBoard(){
 		return board.clone();
 	}
 	public void setSquareContent(int x, int y, int content){
 		if(x >= 0 && x < width){
 			if(y >= 0 && y < height)
-				board[y*width+x] = content;
+				board[y*width+x] = (byte)content;
 		}
 	}
 	public void setSquareContent(int i, int content){
-		board[i] = content;
+		board[i] = (byte)content;
 	}
 	
 	
@@ -64,14 +64,14 @@ public class Board {
 					if(i != 0 || j != 0){
 						curX = x+i;
 						curY = y+j;
-						if(curX > 0 && curX < width
-								&& curY > 0 && curY < height){
+						if(curX >= 0 && curX < width
+								&& curY >= 0 && curY < height){
 							if(this.getSquareContent(curX, curY) != 0 && this.getSquareContent(curX, curY) != color){
 								do{
 									curX += i;
 									curY += j;
-								}while(curX > 0 && curX < width
-										&& curY > 0 && curY < height
+								}while(curX >= 0 && curX < width
+										&& curY >= 0 && curY < height
 										&& this.getSquareContent(curX, curY) != 0 
 										&& this.getSquareContent(curX, curY) != color);
 								if(this.getSquareContent(curX, curY) == color){
@@ -98,14 +98,14 @@ public class Board {
 					if(i != 0 || j != 0){
 						curX = x+i;
 						curY = y+j;
-						if(curX > 0 && curX < width
-								&& curY > 0 && curY < height){
+						if(curX >= 0 && curX < width
+								&& curY >= 0 && curY < height){
 							if(this.getSquareContent(curX, curY) != 0 && this.getSquareContent(curX, curY) != color){
 								do{
 									curX += i;
 									curY += j;
-								}while(curX > 0 && curX < width
-										&& curY > 0 && curY < height
+								}while(curX >= 0 && curX < width
+										&& curY >= 0 && curY < height
 										&& this.getSquareContent(curX, curY) != 0 
 										&& this.getSquareContent(curX, curY) != color);
 								if(this.getSquareContent(curX, curY) == color){

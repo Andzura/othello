@@ -36,7 +36,7 @@ public class PlayState extends State{
 				};
 		gameBoard.addMouseListener(new Mouse());
 		board = new Board(8,8);
-		controller = new PlayController(false, board);
+		controller = new PlayController(true, board);
 		cases = new Case[8*8];
 	}
 	
@@ -58,27 +58,18 @@ public class PlayState extends State{
 	public void update(long elapsedTime) {
 		// TODO Auto-generated method stub
 		if(updateNeeded){
-			boolean canPlay = false;
-			updateNeeded = false;
-			long start = System.nanoTime();
+			updateNeeded = controller.update();
 			for(int i = 0; i < 8; i++){
 				for(int j = 0; j < 8; j++){
 					if(controller.isPlayable(i, j)){
 						cases[i+j*8].select();
-						canPlay = true;
 					}else{
 						cases[i+j*8].unselect();
 					}
 				}
 			}
-			long end = System.nanoTime();
-			float time = (end - start);
-			System.out.println("playable square computed in " + time + "ns.");
-			if(!canPlay){
-				updateNeeded = true;
-				controller.changePlayer();
-			}
 			this.render();
+			
 		}
 		if(Mouse.getClick()){
 			updateNeeded = true;

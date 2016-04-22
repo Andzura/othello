@@ -16,17 +16,15 @@ public class PlayController {
 		this.ai = ai;
 		this.board = board;
 		this.playerTurn = 2;
-		AI.play(board.getBoard(), 1);
 	}
 	
 	public void play(int x, int y){
-		if(!ai || playerTurn == 2){
+		if(!ai || playerTurn == 1){
 			if(board.play(x, y, playerTurn)){
 				playerTurn = playerTurn%2 + 1;
 			}
-		}else{
-			
 		}
+		
 	}
 
 	public boolean isPlayable(int i, int j) {
@@ -35,5 +33,20 @@ public class PlayController {
 
 	public void changePlayer() {
 		playerTurn = playerTurn%2 + 1;
+	}
+
+	public boolean update() {
+		if(ai && playerTurn == 2){
+			int pos = AI.play(board.getBoard(), playerTurn);
+			int x = pos%8;
+			int y = pos/8;
+			if(board.play(x, y, playerTurn)){
+				playerTurn = playerTurn%2 + 1;
+				return true;
+			}else{
+				playerTurn = playerTurn%2 + 1;
+			}
+		}
+		return false;
 	}
 }
