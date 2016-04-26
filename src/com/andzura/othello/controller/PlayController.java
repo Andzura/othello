@@ -19,7 +19,7 @@ public class PlayController {
 	}
 	
 	public void play(int x, int y){
-		if(!ai || playerTurn == 1){
+		if(!ai || playerTurn == 2){
 			if(board.play(x, y, playerTurn)){
 				playerTurn = playerTurn%2 + 1;
 			}
@@ -36,7 +36,7 @@ public class PlayController {
 	}
 
 	public boolean update() {
-		if(ai && playerTurn == 2){
+		if(ai && playerTurn == 1){
 			int pos = AI.play(board.getBoard(), playerTurn);
 			int x = pos%8;
 			int y = pos/8;

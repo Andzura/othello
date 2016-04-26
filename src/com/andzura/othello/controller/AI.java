@@ -1,27 +1,22 @@
 package com.andzura.othello.controller;
 
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.util.ArrayDeque;
+import java.util.BitSet;
 import java.util.Deque;
 import java.util.HashMap;
+import java.util.Iterator;
+import java.util.Map;
 
 import me.grea.antoine.utils.Dice;
 
 public class AI {
-
+        private static int WIDTH = 8;
+        private static int  HEIGHT = 8;
 	private static int MINUSINFINITE = Integer.MIN_VALUE;
 	private static int PLUSINFINITE = Integer.MAX_VALUE;
-	private static MessageDigest md;
-	private static HashMap<String, Integer> lookupTable = new HashMap<>();
+	private static HashMap<BitSet, Integer[]> lookupTable = new HashMap<>();
 	
 	public static int play(byte[] board, int player){
-		try {
-			md = MessageDigest.getInstance("MD5");
-		} catch (NoSuchAlgorithmException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
-		}
 		long start = System.currentTimeMillis();
 		System.out.println("START");
 		Deque<Byte> playable = playableSquare(board, player);
@@ -35,7 +30,7 @@ public class AI {
 			for(int i = 0; i < size; i++){
 				scores[i][0] = playable.pop();
 				board[scores[i][0]] = (byte)player;
-				scores[i][1] = -alphaBeta(5, board,-beta, -alpha, player%2+1);
+				scores[i][1] = -alphaBeta(8, board,-beta, -alpha, player%2+1);
 				if(scores[i][1] > alpha){
 					alpha = scores[i][1];
 				}
@@ -43,7 +38,6 @@ public class AI {
 			}
 		}
 		playable = null;
-		md = null;
 		//find the best move
 		int best = 0;
 		int bestScore = MINUSINFINITE;
@@ -59,39 +53,63 @@ public class AI {
 		long end = System.currentTimeMillis();
 		float time = (end - start);
 		System.out.println("best move is: "+ best + " computed in " + time + "ms.");
+		Iterator it = lookupTable.entrySet().iterator();
+	    while (it.hasNext()) {
+	        Map.Entry pair = (Map.Entry)it.next();
+	        if(((Integer[])(pair.getValue()))[1] == 5){
+	        	lookupTable.remove((BitSet)pair.getKey());	        	
+	        }
+	        else{
+	        	((Integer[])(pair.getValue()))[1]++;
+	        	lookupTable.put((BitSet)pair.getKey(), (Integer[])pair.getValue());
+	        }
+	        it.remove();
+	    }
 		return best;
 	}
 	
 	private static int alphaBeta(int depth, byte[] board, int alpha, int beta, int player) {
-		String hash = md.digest(board).toString();
-		if(lookupTable.containsKey(hash))
-			return lookupTable.get(hash);
+		int score;
+                if((score = hasAlreadyBeenTested(board)) != MINUSINFINITE)
+			return score;
+                BitSet hash = new BitSet(board.length * 2);
+                for(int i = 0; i<board.length; i++){
+			if(board[i] == 1)
+				hash.set(i*2);
+			else if(board[i] == 2)
+				hash.set(i*2+1);
+		}
 		Deque<Byte> playable = playableSquare(board, player);
 		if(depth == 0 || playable.size() == 0){
 			return evaluate(board, player);
 		}
 		orderMove(board, playable, player);
 		int best = MINUSINFINITE;
-		int score;
 		int move;
 		int size = playable.size();
 		for(int i = 0; i < size; i++){
 			move = playable.pop();
 			board[move] = (byte)player;
-			score = -alphaBeta(depth - 1,board, -beta, -alpha, player%2+1);
+			if(i == 0){
+				score = -alphaBeta(depth - 1,board, -beta, -alpha, player%2+1);
+			}else{
+				score = -alphaBeta(depth - 1,board, -alpha-1, -alpha, player%2+1);
+				if(score > alpha && score<beta)
+					score = -alphaBeta(depth - 1,board, -beta, -score, player%2+1);
+			}
 			board[move] = 0;
 			if(score > best){
 				best = score;
 				if(best > alpha){
 					alpha = best;
 						if(alpha > beta){
-							lookupTable.put(hash, alpha);
+							lookupTable.put(hash, new Integer[]{alpha,0});
 							return alpha;
 						}
 				}
 			}
 		}
-		lookupTable.put(hash, best);
+		lookupTable.put(hash, new Integer[]{best,0});
 		return best;
 	}
 
@@ -126,7 +144,7 @@ public class AI {
 		int moveOpponent = playableSquare(board, player%2+1).size();
 		float mobilityScore = 0;
 		if(movePlayer != 0 || moveOpponent != 0 )
-			mobilityScore = 200*(movePlayer - moveOpponent)/(movePlayer + moveOpponent);
+			mobilityScore = 100*(movePlayer - moveOpponent)/(movePlayer + moveOpponent);
 		float coinScore = 0;
 		float coin = 0;
 		for(int i = 0; i < board.length; i++){
@@ -202,5 +220,72 @@ public class AI {
 			return false;
 		
 	}
+
+    /*
+        int hasAlreadyBeenTested(byte[] board)
+        Return the score of a board if it had already been tested,
+        Or if one of its rotation/symetry already had been.
+        
+        */
+    private static int hasAlreadyBeenTested(byte[] board){
+        BitSet hash = new BitSet(board.length * 2);
+        for(int i = 0; i<board.length; i++){
+                if(board[i] == 1)
+                        hash.set(i*2);
+                else if(board[i] == 2)
+                        hash.set(i*2+1);
+        }
+        if(lookupTable.containsKey(hash))
+            return lookupTable.get(hash)[0];
+        for(int i = board.length - 1; i >= 0; i--){
+                if(board[i] == 1){
+                        hash.set((board.length - i)*2);
+                        hash.set(i*2+1, false);
+                }
+                else if(board[i] == 2){
+                        hash.set((board.length - i)*2+1);
+                        hash.set((board.length - i)*2, false);
+                }
+                else{ 
+                        hash.set((board.length - i)*2, false);
+                        hash.set((board.length - i)*2+1, false);
+                }
+        }
+        if(lookupTable.containsKey(hash))
+            return lookupTable.get(hash)[0];
+        for(int i = 0; i < WIDTH; i++){
+            for(int j = 0; j < HEIGHT;j++){
+                if(board[j*HEIGHT+i] == 1)
+                        hash.set((i*HEIGHT+j)*2);
+                else if(board[i] == 2)
+                        hash.set((i*HEIGHT+j)*2+1);
+                else{    
+                        hash.set((board.length - i*HEIGHT+j)*2,false);
+                        hash.set((board.length - i*HEIGHT+j)*2+1,false);
+                }
+            }
+        }
+        if(lookupTable.containsKey(hash))
+            return lookupTable.get(hash)[0];
+        for(int i = WIDTH-1; i >= 0; i--){
+            for(int j = HEIGHT - 1; j >= 0;j--){
+                if(board[j*HEIGHT+i] == 1){
+                        hash.set((board.length - i*HEIGHT+j)*2);
+                        hash.set((board.length - i*HEIGHT+j)*2+1,false);
+                }
+                else if(board[i] == 2){
+                        hash.set((board.length - i*HEIGHT+j)*2+1);
+                        hash.set((board.length - i*HEIGHT+j)*2,false);
+                }
+                else{   
+                        hash.set((board.length - i*HEIGHT+j)*2,false);
+                        hash.set((board.length - i*HEIGHT+j)*2+1,false);
+                }
+            }
+        }
+        if(lookupTable.containsKey(hash))
+            return lookupTable.get(hash)[0];
+        return MINUSINFINITE;
+    }
 	
 }
