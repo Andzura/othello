@@ -7,6 +7,14 @@ public class Board {
 	private byte[] board;
 	private int height, width;
 	
+	public Board(){
+		this(8,8);
+	}
+	public Board(byte[] board, int height, int width){
+		this.board = board;
+		this.height = height;
+		this.width = width;
+	}
 	public Board(int height, int width){
 		this.height = height;
 		this.width = width;
@@ -25,6 +33,14 @@ public class Board {
 				}
 			}
 		}
+	}
+	
+	public int getHeight(){
+		return height;
+	}
+	
+	public int getWidth(){
+		return width;
 	}
 	
 	public int getSquareContent(int x, int y){
@@ -128,4 +144,33 @@ public class Board {
 		}
 		return playable;
 	}
+	
+	public boolean checkEndGame(){
+		for(int i = 0; i < this.getHeight() * this.getWidth(); i++){
+			if((this.isPlayable(i%8, i/8, 1) || this.isPlayable(i%8, i/8, 2)))
+					return false;
+		}
+		return true;
+	}
+	
+	public int winner() {
+		int scoreP1 = 0;
+		int scoreP2 = 0;
+		for(int i = 0; i < this.getHeight() * this.getWidth(); i++){
+			if(this.getSquareContent(i) == 1)
+				scoreP1++;
+			else if(this.getSquareContent(i) == 2)
+				scoreP2++;
+		}
+		return (scoreP1 > scoreP2 ? 1 : 2);
+	}
+	public void print() {
+		for(int i = 0; i < this.getHeight(); i++){
+			for(int j = 0; j < this.getWidth(); j++){
+				System.out.print(this.getSquareContent(j, i) + " ");
+			}
+			System.out.println();
+		}
+	}
+	
 }

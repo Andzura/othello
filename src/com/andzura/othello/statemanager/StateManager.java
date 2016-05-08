@@ -5,6 +5,8 @@ import java.util.Deque;
 import java.util.HashMap;
 import java.util.Map;
 
+import javax.swing.JPanel;
+
 
 /* The statemanager concept was explained to me by Tomyi,
  * So I want to thanks him to explained me how it works and
@@ -15,11 +17,12 @@ public class StateManager {
 
 		private Map<String, State> states = new HashMap<String, State>();
 	    private Deque<State> stack = new ArrayDeque<State>();
+	    private JPanel screen;
 
 	    //create an empty StateManager
 	    //adding State and pushing one on Top of the stack 
 	    // is needed before any other action on this StateManager.
-	    public StateManager(){	    	
+	    public StateManager(){	   
 	    }
 	    //create a StateManager with only the State state
 	    //push this State on top of the stack.
@@ -27,6 +30,7 @@ public class StateManager {
 	    	this.states.put(nameState, state);
 	    	state.init();
 	    	this.stack.push(state);
+	    	screen = stack.peek().getScreen();
 	    }
 	    
 	    //create a StateManager with Map of States
@@ -53,6 +57,8 @@ public class StateManager {
 	        State state = states.get(name);
 	        state.init();
 	        stack.push(state);
+	        screen = stack.peek().getScreen();
+	        
 	    }
 	 
 	    public State pop()
@@ -76,5 +82,7 @@ public class StateManager {
 			return states.get(nameState);
 		}
 		
-	
+		public JPanel getScreen(){
+			return screen;
+		}
 }

@@ -4,288 +4,423 @@ import java.util.ArrayDeque;
 import java.util.BitSet;
 import java.util.Deque;
 import java.util.HashMap;
-import java.util.Iterator;
-import java.util.Map;
+
+import com.andzura.othello.model.Board;
 
 import me.grea.antoine.utils.Dice;
 
 public class AI {
-        private static int WIDTH = 8;
-        private static int  HEIGHT = 8;
-	private static int MINUSINFINITE = Integer.MIN_VALUE;
-	private static int PLUSINFINITE = Integer.MAX_VALUE;
-	private static HashMap<BitSet, Integer[]> lookupTable = new HashMap<>();
+	private  static final int MINUSINFINITE = Integer.MIN_VALUE;
+	private  static final int PLUSINFINITE = Integer.MAX_VALUE;
+    private  static final int WIDTH = 8;
+    private  static final int  HEIGHT = 8;
+    private  static final int branchingFactor = 7;
+    private  static final byte[] weightedBoard = {	 4, -3,  2,  2,  2,  2, -3,  4,
+													-3, -4, -1, -1, -1, -1, -4, -3,
+													 2, -1,  1,  0,  0,  1, -1,  2,
+													 2, -1,  0,  1,  1,  0, -1,  2,
+													 2, -1,  0,  1,  1,  0, -1,  2,
+													 2, -1,  1,  0,  0,  1, -1,  2,
+													-3, -4, -1, -1, -1, -1, -4, -3,
+													 4, -3,  2,  2,  2,  2, -3,  4};
+    private  int turn = 0;
+	private  HashMap<BitSet, Integer> lookupTable = new HashMap<>();
+	private  HashMap<BitSet, Integer> transpositionTable = new HashMap<>();
+	private int nonLeaf;
+	private int node;
+	private long MAXTIME;
+	private float coefCorner;
+	private float coefMobility;
+	private float coefCoin;
+	private float coefCSquare;
 	
-	public static int play(byte[] board, int player){
+	
+	public AI(){
+		this(1000, 7,1, 80,32);
+	}
+	
+	public AI(long maxtime){
+		this(maxtime, 7,1, 80,32);
+	}
+	
+	public AI(long maxtime, float coefMobility, float coefCoin, float coefCorner, float coefCSquare) {
+		this.MAXTIME = maxtime;
+		this.coefMobility = coefMobility;
+		this.coefCoin = coefCoin;
+		this.coefCorner = coefCorner;
+		this.coefCSquare = coefCSquare;
+	}
+	
+	public  int play(Board board, int player, int turn){
+		this.turn = turn; 
 		long start = System.currentTimeMillis();
-		System.out.println("START");
 		Deque<Byte> playable = playableSquare(board, player);
-		orderMove(board, playable, player);
 		int[][] scores = new int[playable.size()][2];
+		int best;
 		//compute score of every possible move.
-		{
-			int alpha = MINUSINFINITE;
-			int beta = PLUSINFINITE;
-			int size = playable.size();
+		int alpha = MINUSINFINITE;
+		int beta = PLUSINFINITE;
+		int size = playable.size();
+		if(size > 1){
 			for(int i = 0; i < size; i++){
 				scores[i][0] = playable.pop();
-				board[scores[i][0]] = (byte)player;
-				scores[i][1] = -alphaBeta(8, board,-beta, -alpha, player%2+1);
-				if(scores[i][1] > alpha){
-					alpha = scores[i][1];
-				}
-				board[scores[i][0]] = 0;
 			}
-		}
-		playable = null;
-		//find the best move
-		int best = 0;
-		int bestScore = MINUSINFINITE;
-		for(int i = 0; i < scores.length; i++){
-			System.out.println("move " + scores[i][0] + " has a score of "+ scores[i][1]);
-			if(scores[i][1] >= bestScore){
-				if(scores[i][1] > bestScore || Dice.roll(6)%2 == 0){
-					bestScore = scores[i][1];
-					best = scores[i][0];
+			int depth = 0;	
+			while(System.currentTimeMillis() - start < MAXTIME){
+					nonLeaf = 0;
+					node = 0;
+					long startDepth = System.currentTimeMillis();
+					for(int i = 0; i < scores.length; i++){
+						Board testBoard = new Board(board.getBoard(), HEIGHT, WIDTH);
+						testBoard.play(scores[i][0]%WIDTH, scores[i][0]/WIDTH, player);
+						scores[i][1] = -alphaBeta(depth, testBoard,-beta, -alpha, player%2+1);
+						testBoard = null;
+						if(scores[i][1] > alpha){
+							alpha = scores[i][1];
+						}
+					}
+					long time = System.currentTimeMillis() - startDepth;
+					for(int j = 0; j <scores.length; j++){
+						for(int k = 0; k < scores.length; k++){
+							if(scores[k][1] < scores[j][1]){
+								scores[k][1] += scores[j][1];
+								scores[j][1] = (byte)(scores[k][1] - scores[j][1]);
+								scores[k][1] -= scores[j][1];
+								scores[k][0] += scores[j][0];
+								scores[j][0] = (byte)(scores[k][0] - scores[j][0]);
+								scores[k][0] -= scores[j][0];
+							}
+						}	
+					}
+				if(nonLeaf == 0)
+					break;
+				if(branchingFactor * time > (MAXTIME - (System.currentTimeMillis() - start)))
+					break;
+				depth++;
+				transpositionTable.clear();
+				}
+			
+			System.out.println("final DEPTH : " + depth + "node " +node+" nonLeaf "+ nonLeaf);
+			lookupTable.clear();		
+			playable = null;
+			//find the best move
+			best = 0;
+			int bestScore = MINUSINFINITE;
+			for(int i = 0; i < scores.length; i++){
+				if(scores[i][1] >= bestScore){
+					if(scores[i][1] > bestScore || Dice.roll(6)%2 == 0){
+						bestScore = scores[i][1];
+						best = scores[i][0];
+					}
 				}
 			}
+		}else{
+			if(!playable.isEmpty())
+				best = playable.pop();
+			else
+				best = -1;
 		}
-		long end = System.currentTimeMillis();
-		float time = (end - start);
-		System.out.println("best move is: "+ best + " computed in " + time + "ms.");
-		Iterator it = lookupTable.entrySet().iterator();
-	    while (it.hasNext()) {
-	        Map.Entry pair = (Map.Entry)it.next();
-	        if(((Integer[])(pair.getValue()))[1] == 5){
-	        	lookupTable.remove((BitSet)pair.getKey());	        	
-	        }
-	        else{
-	        	((Integer[])(pair.getValue()))[1]++;
-	        	lookupTable.put((BitSet)pair.getKey(), (Integer[])pair.getValue());
-	        }
-	        it.remove();
-	    }
 		return best;
 	}
 	
-	private static int alphaBeta(int depth, byte[] board, int alpha, int beta, int player) {
+	private  int alphaBeta(int depth, Board board, int alpha, int beta, int player) {
+		this.turn++;
 		int score;
-                if((score = hasAlreadyBeenTested(board)) != MINUSINFINITE)
+		BitSet hash = new BitSet(WIDTH*HEIGHT * 2);
+		for(int j = 0; j< WIDTH*HEIGHT; j++){
+			if(board.getSquareContent(j) == 1){
+				hash.set(j*2);
+			}
+			else if(board.getSquareContent(j) == 2){
+				hash.set(j*2+1);
+			}
+		}
+		if(depth == 0 || board.checkEndGame()){
+			node++;
+			if(!board.checkEndGame()){
+				nonLeaf++;
+			}else{
+			}
+			score = evaluate(board, player);
+			this.addTestedBoardToTranspositionTable(board.getBoard(), score);
+			this.turn--;
 			return score;
-                BitSet hash = new BitSet(board.length * 2);
-                for(int i = 0; i<board.length; i++){
-			if(board[i] == 1)
-				hash.set(i*2);
-			else if(board[i] == 2)
-				hash.set(i*2+1);
+			
+		}
+		if(transpositionTable.containsKey(hash)){
+			
+			node++;
+			return transpositionTable.get(hash);
 		}
 		Deque<Byte> playable = playableSquare(board, player);
-		if(depth == 0 || playable.size() == 0){
-			return evaluate(board, player);
+		if(playable.isEmpty()){
+			return -alphaBeta(depth - 1,board, -beta, -alpha, player%2+1);
 		}
-		orderMove(board, playable, player);
-		int best = MINUSINFINITE;
-		int move;
+		Board testBoard;
 		int size = playable.size();
+		int move;
+		int[][] order = new int[size][2];
 		for(int i = 0; i < size; i++){
 			move = playable.pop();
-			board[move] = (byte)player;
-			if(i == 0){
-				score = -alphaBeta(depth - 1,board, -beta, -alpha, player%2+1);
-			}else{
-				score = -alphaBeta(depth - 1,board, -alpha-1, -alpha, player%2+1);
-				if(score > alpha && score<beta)
-					score = -alphaBeta(depth - 1,board, -beta, -score, player%2+1);
+			testBoard = new Board(board.getBoard(),HEIGHT, WIDTH);
+			for(int j = 0; j< WIDTH*HEIGHT; j++){
+				if(testBoard.getSquareContent(j) == 1){
+					hash.set(j*2);
+					hash.clear(j*2+1);
+				}
+				else if(testBoard.getSquareContent(j) == 2){
+					hash.set(j*2+1);
+					hash.clear(j*2);
+				}
+				else{
+					hash.clear(j*2);
+					hash.clear(j*2+1);
+				}
+				
 			}
-			board[move] = 0;
+			if(lookupTable.containsKey(hash)){
+				score = lookupTable.get(hash);
+			}else{
+				score = 0;
+			}
+			for(int j = 0; j < order.length; j++){
+				if(order[j][0] == 0){
+					order[j][0] = move;
+					order[j][1] = score;
+					break;
+				}
+				if(score > order[j][1]){
+					order[j][0] += move;
+					move = order[j][0] - move;
+					order[j][0] -= move;
+					order[j][1] += score;
+					score = order[j][1] - score;
+					order[j][1] -= score;
+				}
+				
+			}
+		}
+		hash = null;
+		testBoard = null;
+		for(int i = 0; i < order.length; i++){
+			playable.addLast((byte)order[i][0]);
+		}
+		if(order.length != playable.size()){
+			System.out.println("initial size " + size);
+			System.out.print("[");
+			for(int i = 0; i < order.length; i++){
+				System.out.print(order[i][0] + ", ");
+			}
+			System.out.println("] != " + playable.toString());
+		}
+		order = null;
+		int best = MINUSINFINITE;
+		size = playable.size();
+		for(int i = 0; i < size; i++){
+			move = playable.pop();
+			testBoard = new Board(board.getBoard(), HEIGHT, WIDTH);
+			testBoard.play(move%WIDTH, move/WIDTH, player);
+			if(i == 0){
+				score = -alphaBeta(depth - 1,testBoard, -beta, -alpha, player%2+1);
+			}else{
+				score = -alphaBeta(depth - 1,testBoard, -alpha-1, -alpha, player%2+1);
+				if(score > alpha && score<beta)
+					score = -alphaBeta(depth - 1,testBoard, -beta, -score, player%2+1);
+			}
+			this.addTestedBoardToLookupTable(testBoard.getBoard(), score); 
+			testBoard = null;
 			if(score > best){
 				best = score;
 				if(best > alpha){
 					alpha = best;
 						if(alpha > beta){
-							lookupTable.put(hash, new Integer[]{alpha,0});
+							this.turn--;
+							this.addTestedBoardToTranspositionTable(board.getBoard(), alpha); 
 							return alpha;
 						}
 				}
 			}
 		}
-		lookupTable.put(hash, new Integer[]{best,0});
+		this.turn--;
+		this.addTestedBoardToTranspositionTable(board.getBoard(), best);
 		return best;
 	}
 
 	
-	private static void orderMove(byte[] board, Deque<Byte> playable, int player){
-		byte[] move = new byte[playable.size()];
-		byte tempMove, tempMoveNumber;
-		for(int i = 0; i < move.length; i++){
-			tempMove = playable.pop();
-			board[tempMove] = (byte)player;
-			tempMoveNumber = (byte)playableSquare(board, player%2+1).size();
-			board[tempMove] = 0;
-			for(int j = 0; j < move.length; j++){
-				if(move[j] == 0){
-					move[j] = tempMove;
-					break;
-				}
-				if(tempMoveNumber < move[j]){
-					move[j] += tempMove;
-					tempMove = (byte)(move[j] - tempMove);
-					move[j] -= tempMove;
-				}
-				
-			}
-		}
-		for(int i= 0; i < move.length; i++)
-			playable.add(move[i]);
-	}
 	
-	private static int evaluate(byte[] board, int player){
-		int movePlayer = playableSquare(board, player).size();
-		int moveOpponent = playableSquare(board, player%2+1).size();
+	private  int evaluate(Board oBoard, int player){
+		//mobilityScore represent which player has more move available
+		byte[] board = oBoard.getBoard();
+		int movePlayer = playableSquare(oBoard, player).size();
+		int moveOpponent = playableSquare(oBoard, player%2+1).size();
 		float mobilityScore = 0;
-		if(movePlayer != 0 || moveOpponent != 0 )
-			mobilityScore = 100*(movePlayer - moveOpponent)/(movePlayer + moveOpponent);
+		//coinScore represents which player has more coin on the board.
+		//it's actually what determine victory in othello, but it's not that important  
+		//when you're looking for a strategy.
+		float coinScorePlayer = 0;
+		float coinScoreOpp = 0;
 		float coinScore = 0;
-		float coin = 0;
+		//cornerScore represents which player has corner, corner being a really important square to have
+		//because of it's stability (it can be taken) and because he permits you to take a lot of coin
+		float cornerScore = 0;
+		float cornerScorePlayer = 0;
+		float cornerScoreOpp = 0;
+		//cSquareScore represents which player has the square around a corner, when the corner is not taken
+		//having those square is a bad thing as it gives away the corner.
+		float cSquareScore = 0;
+		float cSquareScorePlayer = 0;
+		float cSquareScoreOpp = 0;
 		for(int i = 0; i < board.length; i++){
 			if(board[i] == player){
-				coinScore += checkZone(i);
-				coin += coinScore;
+					coinScorePlayer += weightedBoard[i];
+					if(i == 0 || i == WIDTH-1
+							|| i == (HEIGHT-1*WIDTH) || i == HEIGHT*WIDTH-1)
+						cornerScorePlayer++;
 			}else if(board[i] != 0){
-				coinScore -= checkZone(i);
-				coin += coinScore;
+					coinScoreOpp += weightedBoard[i];
+					if(i == 0 || i == WIDTH-1
+							|| i == (HEIGHT-1*WIDTH) || i == HEIGHT*WIDTH-1)
+						cornerScoreOpp++;
 			}
 		}
-		coinScore = 100*(coinScore/coin);
-		int score =(int) (mobilityScore + coinScore);
+		coinScore = 100*((coinScorePlayer-coinScoreOpp)/(coinScorePlayer+coinScoreOpp));
+		if(turn < 50){
+			if(movePlayer != 0 || moveOpponent != 0 ){
+				if(movePlayer > moveOpponent)
+					mobilityScore = 100*(movePlayer)/(movePlayer + moveOpponent);
+				else if(movePlayer < moveOpponent)
+					mobilityScore = -100*(moveOpponent)/(movePlayer + moveOpponent);
+			}
+			if(board[0] == 0){
+				if(board[1] == player){
+					cSquareScorePlayer++;
+				}else if(board[1] != 0){
+					cSquareScoreOpp++;
+				}
+				if(board[WIDTH] == player){
+					cSquareScorePlayer++;
+				}else if(board[WIDTH] != 0){
+					cSquareScoreOpp++;
+				}
+				if(board[WIDTH+1] == player){
+					cSquareScorePlayer++;
+				}else if(board[WIDTH+1] != 0){
+					cSquareScoreOpp++;
+				}
+			}
+			if(board[WIDTH-1] == 0){
+				if(board[WIDTH-2] == player){
+					cSquareScorePlayer++;
+				}else if(board[WIDTH-2] != 0){
+					cSquareScoreOpp++;
+				}
+				if(board[WIDTH*2-1] == player){
+					cSquareScorePlayer++;
+				}else if(board[WIDTH*2-1] != 0){
+					cSquareScoreOpp++;
+				}
+				if(board[WIDTH*2-2] == player){
+					cSquareScorePlayer++;
+				}else if(board[WIDTH*2-2] != 0){
+					cSquareScoreOpp++;
+				}
+			}		
+			if(board[WIDTH*(HEIGHT-1)] == 0){
+				if(board[WIDTH*(HEIGHT-1)+1] == player){
+					cSquareScorePlayer++;
+				}else if(board[WIDTH*(HEIGHT-1)+1] != 0){
+					cSquareScoreOpp++;
+				}
+				if(board[WIDTH*(HEIGHT-2)] == player){
+					cSquareScorePlayer++;
+				}else if(board[WIDTH*(HEIGHT-2)] != 0){
+					cSquareScoreOpp++;
+				}
+				if(board[WIDTH*(HEIGHT-2)+1] == player){
+					cSquareScorePlayer++;
+				}else if(board[WIDTH*(HEIGHT-2)+1] != 0){
+					cSquareScoreOpp++;
+				}
+			}
+			if(board[WIDTH*HEIGHT - 1] == 0){
+				if(board[WIDTH*HEIGHT - 2] == player){
+					cSquareScorePlayer++;
+				}else if(board[WIDTH*HEIGHT - 2] != 0){
+					cSquareScoreOpp++;
+				}
+				if(board[WIDTH*(HEIGHT-1) - 1] == player){
+					cSquareScorePlayer++;
+				}else if(board[WIDTH*(HEIGHT-1) - 1] != 0){
+					cSquareScoreOpp++;
+				}
+				if(board[WIDTH*(HEIGHT-1) - 2] == player){
+					cSquareScorePlayer++;
+				}else if(board[WIDTH*(HEIGHT-1) - 2] != 0){
+					cSquareScoreOpp++;
+				}
+			}
+			cSquareScore = -6.25f*(cSquareScorePlayer-cSquareScoreOpp);
+			cornerScore = 25f*(cornerScorePlayer-cornerScoreOpp);
+		}
+		//score is the final score, it's computed with all the other score, every one of those being weighted
+		//relatively to its actual importance in the strategy.
+		int score =(int) (coefMobility*mobilityScore+coefCoin*coinScore+coefCorner*cornerScore+coefCSquare*cSquareScore);
 		return score;
 	}
 	
-	private static int checkZone(int i){
-		if(i-1 == 0 || i+1==7 
-				|| i-1 == 56 || i+1 == 63)
-			return -50;
-		if(i-8 == 0 || i - 8 == 7
-				|| i+8 == 56 || i+8 == 63)
-			return -50;
-		if(i-9 == 0 || i-7 == 7
-				|| i+7 == 56 || i+9 == 63)
-			return -50;
-		if(i == 0 || i == 7
-					||i == 56 || i == 63)
-			return 50;
-		return 0;
-	}
-	private static Deque<Byte> playableSquare(byte[] board, int player){
+	private  Deque<Byte> playableSquare(Board board, int player){
 		Deque<Byte> playable = new ArrayDeque<>();
-		for(int i = 0; i < board.length; i++){
-			if(isPlayable(i,board,player))
+		for(int i = 0; i < WIDTH*HEIGHT; i++){
+			if(board.isPlayable(i%WIDTH,i/WIDTH,player))
 				playable.add((byte)i);
 		}
 		return playable;
 	}
-	private static boolean isPlayable(int square, byte[] board, int player){
-			if(board[square] == 0){
-				int width = 8;
-				int height = 8;
-				int x = square%width;
-				int y = square/width;
-				int curX, curY;
-				for(int i = -1 ; i <= 1; i++){
-					for(int j = -1; j<=1 ; j++){
-						if(i != 0 || j != 0){
-							curX = x+i;
-							curY = y+j;
-							if(curX >= 0 && curX < width
-									&& curY >= 0 && curY < height){
-								if(board[curX+curY*8] != 0 && board[curX+curY*8]  != player){
-									do{
-										curX += i;
-										curY += j;
-									}while(curX >= 0 && curX < width
-											&& curY >= 0 && curY < height
-											&& board[curX+curY*8]!= 0 
-											&& board[curX+curY*8]!= player);
-									if(curX >= 0 && curX < width
-											&& curY >= 0 && curY < height
-											&& board[curX+curY*8] == player){
-										return true;
-									}
-								}
-							}
-						}
-					}
-				}
-			}
-			return false;
-		
-	}
+	
 
     /*
-        int hasAlreadyBeenTested(byte[] board)
-        Return the score of a board if it had already been tested,
-        Or if one of its rotation/symetry already had been.
+        void addTestedBoardToLookupTable(byte[] board, int score)
+        add the score of a board in the lookupTable, also add the rotation & symmetry of this board.
+        EDIT: taking into account the symmetry and rotation of the board was actually highly impacting performance,
+        so I don't add them anymore.             
         
         */
-    private static int hasAlreadyBeenTested(byte[] board){
+    private  void addTestedBoardToLookupTable(byte[] board, int score){
         BitSet hash = new BitSet(board.length * 2);
         for(int i = 0; i<board.length; i++){
-                if(board[i] == 1)
-                        hash.set(i*2);
-                else if(board[i] == 2)
-                        hash.set(i*2+1);
-        }
-        if(lookupTable.containsKey(hash))
-            return lookupTable.get(hash)[0];
-        for(int i = board.length - 1; i >= 0; i--){
                 if(board[i] == 1){
-                        hash.set((board.length - i)*2);
-                        hash.set(i*2+1, false);
+                        hash.set(i*2);
                 }
                 else if(board[i] == 2){
-                        hash.set((board.length - i)*2+1);
-                        hash.set((board.length - i)*2, false);
-                }
-                else{ 
-                        hash.set((board.length - i)*2, false);
-                        hash.set((board.length - i)*2+1, false);
+                        hash.set(i*2+1);
                 }
         }
-        if(lookupTable.containsKey(hash))
-            return lookupTable.get(hash)[0];
-        for(int i = 0; i < WIDTH; i++){
-            for(int j = 0; j < HEIGHT;j++){
-                if(board[j*HEIGHT+i] == 1)
-                        hash.set((i*HEIGHT+j)*2);
-                else if(board[i] == 2)
-                        hash.set((i*HEIGHT+j)*2+1);
-                else{    
-                        hash.set((board.length - i*HEIGHT+j)*2,false);
-                        hash.set((board.length - i*HEIGHT+j)*2+1,false);
-                }
-            }
-        }
-        if(lookupTable.containsKey(hash))
-            return lookupTable.get(hash)[0];
-        for(int i = WIDTH-1; i >= 0; i--){
-            for(int j = HEIGHT - 1; j >= 0;j--){
-                if(board[j*HEIGHT+i] == 1){
-                        hash.set((board.length - i*HEIGHT+j)*2);
-                        hash.set((board.length - i*HEIGHT+j)*2+1,false);
-                }
-                else if(board[i] == 2){
-                        hash.set((board.length - i*HEIGHT+j)*2+1);
-                        hash.set((board.length - i*HEIGHT+j)*2,false);
-                }
-                else{   
-                        hash.set((board.length - i*HEIGHT+j)*2,false);
-                        hash.set((board.length - i*HEIGHT+j)*2+1,false);
-                }
-            }
-        }
-        if(lookupTable.containsKey(hash))
-            return lookupTable.get(hash)[0];
-        return MINUSINFINITE;
+        lookupTable.put(hash, score);
     }
+    
+    /*
+    void addTestedBoardToTranspositionTable(byte[] board, int score)
+    	add a board we already computed the score to the Transposition Table
+    	the main difference between transpositionTable and lookupTable, is that transpositionTable is cleared everytime we compute a new depth
+    	but lookupTable is only cleared everytime the play function is used.
+    	that way, lookupTable is used to actually store the score and order the move for each new depth
+    	and transpositionTable is used to get the score of a board we already computed at a given depth 
+    	( which gives boost in performance as any node might be the child of multiples others nodes).            
+    
+    */
+    private void addTestedBoardToTranspositionTable(byte[] board, int score){
+        BitSet hash = new BitSet(board.length * 2);
+        for(int i = 0; i<board.length; i++){
+                if(board[i] == 1){
+                        hash.set(i*2);
+                }
+                else if(board[i] == 2){
+                        hash.set(i*2+1);
+                }
+        }
+        transpositionTable.put(hash, score);
+    }
+    
+    
 	
 }

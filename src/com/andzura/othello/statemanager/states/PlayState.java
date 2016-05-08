@@ -20,7 +20,6 @@ public class PlayState extends State{
 	private Board board;
 	private JPanel gameBoard;
 	private boolean updateNeeded = true;
-	private int playerTurn = 2;
 	private PlayController controller;
 	
 	public PlayState(StateManager manager) {
@@ -68,8 +67,15 @@ public class PlayState extends State{
 					}
 				}
 			}
-			this.render();
-			
+			if(board.checkEndGame()){
+				
+				int winner = board.winner();
+				EndState endstate = new EndState(manager,(winner == 1 ? "White" : "Black"));
+				this.manager.addState(endstate, "end");
+				this.manager.pop();
+				this.manager.push("end");
+			}
+				
 		}
 		if(Mouse.getClick()){
 			updateNeeded = true;
@@ -92,8 +98,9 @@ public class PlayState extends State{
 
 	@Override
 	public void exit() {
-		// TODO Auto-generated method stub
-		
+		screen = null;
+		gameBoard = null;
+		controller = null;
 	}
 
 }
