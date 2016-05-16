@@ -13,7 +13,6 @@ import com.andzura.othello.model.Board;
 
 import com.andzura.othello.utils.Logger;
 
-import me.grea.antoine.utils.Dice;
 
 public class AI {
 	private  static final int MINUSINFINITE = -Integer.MAX_VALUE;
