@@ -12,11 +12,11 @@ import java.io.InputStream;
 
 import javax.swing.JPanel;
 
-import me.grea.antoine.utils.Log;
-
 import com.andzura.othello.graphics.Case;
+import com.andzura.othello.main.Mouse;
 import com.andzura.othello.statemanager.State;
 import com.andzura.othello.statemanager.StateManager;
+import com.andzura.othello.utils.Logger;
 
 
 public class EndState extends State {
@@ -26,21 +26,6 @@ public class EndState extends State {
 		super(manager);
 		JPanel endscreen;
 		font = null;
-		InputStream is = EndState.class.getResourceAsStream("/font/cp437-8x8.ttf");
-		if(is != null){
-			try {
-				font = Font.createFont(Font.TRUETYPE_FONT, is);
-			} catch (FontFormatException | IOException e) {
-				Log.f(e.getMessage());
-			}
-		}else
-			Log.f("Font not found");
-		try {
-			is.close();
-		} catch (IOException e) {
-			Log.f(e.getMessage());
-		}
-		font = font.deriveFont(Font.BOLD, 15);
 		endscreen = new JPanel(){
 			@Override
 			public void paint(Graphics g){
@@ -49,19 +34,20 @@ public class EndState extends State {
 						g2 = (Graphics2D) g;
 				}
 				else {
-						Log.e(" g isn't an instance of Graphics2D.");
+						Logger.println("Error: g is not an instance of Graphics2D", Logger.ERROR);
 						return;
 				}
 				g2.setColor(Color.BLACK);
 				g2.fillRect(0, 0, this.getWidth(), this.getHeight());
 				g2.setColor(Color.WHITE);
-				g2.setFont(font);
+				g2.setFont(g2.getFont().deriveFont(Font.BOLD, 30));
 				FontMetrics fm = g2.getFontMetrics();
 				g2.drawString( winner + " wins.",
 						this.getWidth()/2 - fm.stringWidth("Player "+ winner + " wins.")/2, this.getHeight()/2);
 				}
 		};
 		screen = endscreen;
+		screen.addMouseListener(new Mouse());
 		screen.setBackground(Color.BLACK);
 			
 		
@@ -74,7 +60,10 @@ public class EndState extends State {
 
 	@Override
 	public void update(long elapsedTime) {
-		// Nothing to do here;
+		if(Mouse.getClick()){
+			manager.pop();
+			manager.push(new MenuState(manager));
+		}
 	}
 
 	@Override

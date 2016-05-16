@@ -3,10 +3,14 @@ package com.andzura.othello.statemanager.states;
 import java.awt.Dimension;
 import java.awt.FlowLayout;
 import java.awt.GridLayout;
-import java.util.ArrayDeque;
+
+
+
 
 import javax.swing.JPanel;
-import javax.swing.border.EmptyBorder;
+
+
+
 
 import com.andzura.othello.controller.PlayController;
 import com.andzura.othello.graphics.Case;
@@ -22,7 +26,29 @@ public class PlayState extends State{
 	private boolean updateNeeded = true;
 	private PlayController controller;
 	
+	
+	public PlayState(StateManager manager, boolean ai) {
+		super(manager);
+		gameBoard = new JPanel(){
+			@Override
+		    public Dimension getPreferredSize() {
+		        Dimension d = this.getParent().getSize();
+		        int size = d.width > d.height ? d.height : d.width;
+		        size = size == 0 ? 100 : size;
+		        return new Dimension(size, size);
+		    }
+		};
+	gameBoard.addMouseListener(new Mouse());
+	board = new Board(8,8);
+	controller = new PlayController(false, board);
+	cases = new Case[8*8];
+	}
+	
 	public PlayState(StateManager manager) {
+		this(manager, PlayController.EASY);
+	}
+	
+	public PlayState(StateManager manager, int IALevel){
 		super(manager);
 		gameBoard = new JPanel(){
 					@Override
@@ -35,8 +61,8 @@ public class PlayState extends State{
 				};
 		gameBoard.addMouseListener(new Mouse());
 		board = new Board(8,8);
-		controller = new PlayController(true, board);
 		cases = new Case[8*8];
+		controller = new PlayController(true, board, IALevel);
 	}
 	
 	@Override
@@ -57,23 +83,23 @@ public class PlayState extends State{
 	public void update(long elapsedTime) {
 		// TODO Auto-generated method stub
 		if(updateNeeded){
-			updateNeeded = controller.update();
-			for(int i = 0; i < 8; i++){
-				for(int j = 0; j < 8; j++){
-					if(controller.isPlayable(i, j)){
-						cases[i+j*8].select();
-					}else{
-						cases[i+j*8].unselect();
-					}
-				}
-			}
 			if(board.checkEndGame()){
-				
 				int winner = board.winner();
 				EndState endstate = new EndState(manager,(winner == 1 ? "White" : "Black"));
-				this.manager.addState(endstate, "end");
 				this.manager.pop();
-				this.manager.push("end");
+				this.manager.push(endstate);
+			}
+			else{
+				updateNeeded = controller.update();
+				for(int i = 0; i < 8; i++){
+					for(int j = 0; j < 8; j++){
+						if(controller.isPlayable(i, j)){
+							cases[i+j*8].select();
+						}else{
+							cases[i+j*8].unselect();
+						}
+					}
+				}
 			}
 				
 		}
@@ -98,9 +124,7 @@ public class PlayState extends State{
 
 	@Override
 	public void exit() {
-		screen = null;
-		gameBoard = null;
-		controller = null;
+		board = null;
 	}
 
 }

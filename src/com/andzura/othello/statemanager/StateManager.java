@@ -5,6 +5,7 @@ import java.util.Deque;
 import java.util.HashMap;
 import java.util.Map;
 
+import javax.swing.JFrame;
 import javax.swing.JPanel;
 
 
@@ -15,9 +16,8 @@ import javax.swing.JPanel;
 */
 public class StateManager {
 
-		private Map<String, State> states = new HashMap<String, State>();
 	    private Deque<State> stack = new ArrayDeque<State>();
-	    private JPanel screen;
+	    private JFrame screen = new JFrame();
 
 	    //create an empty StateManager
 	    //adding State and pushing one on Top of the stack 
@@ -26,18 +26,12 @@ public class StateManager {
 	    }
 	    //create a StateManager with only the State state
 	    //push this State on top of the stack.
-	    public StateManager(State state, String nameState){
-	    	this.states.put(nameState, state);
+	    public StateManager(State state){
 	    	state.init();
 	    	this.stack.push(state);
-	    	screen = stack.peek().getScreen();
+	    	screen.add(stack.peek().getScreen());
 	    }
 	    
-	    //create a StateManager with Map of States
-	    //Doesn't push any state on top of the stack
-	    public StateManager(Map<String,State> states){
-	    	this.states.putAll(states);
-	    }
 	    public void update(long elapsedTime)
 	    {
 	        State top = stack.peek();
@@ -52,37 +46,35 @@ public class StateManager {
 	        	top.render();
 	    }
 	 
-	    public void push(String name)
+	    public void push(State state)
 	    {
-	        State state = states.get(name);
 	        state.init();
+	        if(stack.peek() != null)
+	        	screen.remove(stack.peek().getScreen());
 	        stack.push(state);
-	        screen = stack.peek().getScreen();
+	        screen.add(stack.peek().getScreen());
 	        
 	    }
 	 
 	    public State pop()
 	    {
 	        if(stack.peek() != null){
+	        	screen.remove(stack.peek().getScreen());
 	        	stack.peek().exit();
-	    		return stack.pop();
+	        	State s = stack.pop();
+	        	if(stack.peek() != null)
+	        		screen.add(stack.peek().getScreen());
+	    		return s;
 	        }
 	        return null;
 	    }
 	    
-	    public void addState(State state, String nameState){
-	    	states.put(nameState, state);
-	    }
 
 		public State getCurrent() {
 			return stack.peek();
 		}
 		
-		public State getState(String nameState) {
-			return states.get(nameState);
-		}
-		
-		public JPanel getScreen(){
+		public JFrame getScreen(){
 			return screen;
 		}
 }

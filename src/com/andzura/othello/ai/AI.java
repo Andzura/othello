@@ -1,20 +1,26 @@
-package com.andzura.othello.controller;
+package com.andzura.othello.ai;
 
 import java.util.ArrayDeque;
 import java.util.BitSet;
 import java.util.Deque;
 import java.util.HashMap;
+import java.util.Iterator;
+import java.util.Map;
 
 import com.andzura.othello.model.Board;
+
+
+
+import com.andzura.othello.utils.Logger;
 
 import me.grea.antoine.utils.Dice;
 
 public class AI {
-	private  static final int MINUSINFINITE = Integer.MIN_VALUE;
+	private  static final int MINUSINFINITE = -Integer.MAX_VALUE;
 	private  static final int PLUSINFINITE = Integer.MAX_VALUE;
     private  static final int WIDTH = 8;
     private  static final int  HEIGHT = 8;
-    private  static final int branchingFactor = 7;
+    private  static final float timeDepthFactor = 3f;
     private  static final byte[] weightedBoard = {	 4, -3,  2,  2,  2,  2, -3,  4,
 													-3, -4, -1, -1, -1, -1, -4, -3,
 													 2, -1,  1,  0,  0,  1, -1,  2,
@@ -23,52 +29,51 @@ public class AI {
 													 2, -1,  1,  0,  0,  1, -1,  2,
 													-3, -4, -1, -1, -1, -1, -4, -3,
 													 4, -3,  2,  2,  2,  2, -3,  4};
-    private  int turn = 0;
-	private  HashMap<BitSet, Integer> lookupTable = new HashMap<>();
-	private  HashMap<BitSet, Integer> transpositionTable = new HashMap<>();
-	private int nonLeaf;
-	private int node;
+	private  HashMap<BitSet, TTEntry> transpositionTable = new HashMap<>();
+	private boolean leafOnly;
 	private long MAXTIME;
 	private float coefCorner;
 	private float coefMobility;
 	private float coefCoin;
 	private float coefCSquare;
+	private float coefWeighted;
+	private int node;
 	
 	
 	public AI(){
-		this(1000, 7,1, 80,32);
+		this(1000, 79,1, 800,382,5);
 	}
 	
 	public AI(long maxtime){
-		this(maxtime, 7,1, 80,32);
+		this(maxtime, 100,1, 800,300,5);
 	}
 	
-	public AI(long maxtime, float coefMobility, float coefCoin, float coefCorner, float coefCSquare) {
+	public AI(long maxtime, float coefMobility, float coefCoin, float coefCorner, float coefCSquare,float coefWeighted) {
 		this.MAXTIME = maxtime;
 		this.coefMobility = coefMobility;
 		this.coefCoin = coefCoin;
 		this.coefCorner = coefCorner;
 		this.coefCSquare = coefCSquare;
+		this.coefWeighted = coefWeighted;
 	}
 	
 	public  int play(Board board, int player, int turn){
-		this.turn = turn; 
 		long start = System.currentTimeMillis();
 		Deque<Byte> playable = playableSquare(board, player);
 		int[][] scores = new int[playable.size()][2];
 		int best;
 		//compute score of every possible move.
-		int alpha = MINUSINFINITE;
-		int beta = PLUSINFINITE;
 		int size = playable.size();
 		if(size > 1){
 			for(int i = 0; i < size; i++){
 				scores[i][0] = playable.pop();
 			}
 			int depth = 0;	
+			node = 0;
 			while(System.currentTimeMillis() - start < MAXTIME){
-					nonLeaf = 0;
-					node = 0;
+					int alpha = MINUSINFINITE;
+					int beta = PLUSINFINITE;
+					leafOnly = true;
 					long startDepth = System.currentTimeMillis();
 					for(int i = 0; i < scores.length; i++){
 						Board testBoard = new Board(board.getBoard(), HEIGHT, WIDTH);
@@ -92,26 +97,23 @@ public class AI {
 							}
 						}	
 					}
-				if(nonLeaf == 0)
+				if(leafOnly)
 					break;
-				if(branchingFactor * time > (MAXTIME - (System.currentTimeMillis() - start)))
+				if(timeDepthFactor * time > (MAXTIME - (System.currentTimeMillis() - start)))
 					break;
 				depth++;
-				transpositionTable.clear();
 				}
-			
-			System.out.println("final DEPTH : " + depth + "node " +node+" nonLeaf "+ nonLeaf);
-			lookupTable.clear();		
+			transpositionTable.clear();
+			Logger.println("final DEPTH : "+ depth + " done in " + (System.currentTimeMillis() - start) + "ms", Logger.DEBUG);
+			Logger.println("transposition Table used " + node + " times ", Logger.DEBUG);
 			playable = null;
 			//find the best move
 			best = 0;
 			int bestScore = MINUSINFINITE;
 			for(int i = 0; i < scores.length; i++){
-				if(scores[i][1] >= bestScore){
-					if(scores[i][1] > bestScore || Dice.roll(6)%2 == 0){
+				if(scores[i][1] > bestScore){
 						bestScore = scores[i][1];
 						best = scores[i][0];
-					}
 				}
 			}
 		}else{
@@ -124,7 +126,6 @@ public class AI {
 	}
 	
 	private  int alphaBeta(int depth, Board board, int alpha, int beta, int player) {
-		this.turn++;
 		int score;
 		BitSet hash = new BitSet(WIDTH*HEIGHT * 2);
 		for(int j = 0; j< WIDTH*HEIGHT; j++){
@@ -136,21 +137,29 @@ public class AI {
 			}
 		}
 		if(depth == 0 || board.checkEndGame()){
-			node++;
-			if(!board.checkEndGame()){
-				nonLeaf++;
-			}else{
-			}
+			if(!board.checkEndGame())
+				leafOnly = false;
 			score = evaluate(board, player);
-			this.addTestedBoardToTranspositionTable(board.getBoard(), score);
-			this.turn--;
 			return score;
 			
 		}
+		int bestMove = -1;
 		if(transpositionTable.containsKey(hash)){
-			
-			node++;
-			return transpositionTable.get(hash);
+			TTEntry e = transpositionTable.get(hash);
+			bestMove = e.bestMove;
+			if(e.depth >= depth){
+				node++;
+				if(e.flag == TTEntry.EXACT){
+			         return (e.player == player ? 1 : -1) * e.value;
+				}
+			    else if(e.flag == TTEntry.LOWER)
+			         alpha = max(alpha, (e.player == player ? 1 : -1) * e.value);
+			    else if(e.flag == TTEntry.UPPER)
+			         beta = min(beta, (e.player == player ? 1 : -1) * e.value);
+			    if(alpha >= beta){
+			        return (e.player == player ? 1 : -1) * e.value;
+			    }
+			}
 		}
 		Deque<Byte> playable = playableSquare(board, player);
 		if(playable.isEmpty()){
@@ -159,62 +168,13 @@ public class AI {
 		Board testBoard;
 		int size = playable.size();
 		int move;
-		int[][] order = new int[size][2];
-		for(int i = 0; i < size; i++){
-			move = playable.pop();
-			testBoard = new Board(board.getBoard(),HEIGHT, WIDTH);
-			for(int j = 0; j< WIDTH*HEIGHT; j++){
-				if(testBoard.getSquareContent(j) == 1){
-					hash.set(j*2);
-					hash.clear(j*2+1);
-				}
-				else if(testBoard.getSquareContent(j) == 2){
-					hash.set(j*2+1);
-					hash.clear(j*2);
-				}
-				else{
-					hash.clear(j*2);
-					hash.clear(j*2+1);
-				}
-				
-			}
-			if(lookupTable.containsKey(hash)){
-				score = lookupTable.get(hash);
-			}else{
-				score = 0;
-			}
-			for(int j = 0; j < order.length; j++){
-				if(order[j][0] == 0){
-					order[j][0] = move;
-					order[j][1] = score;
-					break;
-				}
-				if(score > order[j][1]){
-					order[j][0] += move;
-					move = order[j][0] - move;
-					order[j][0] -= move;
-					order[j][1] += score;
-					score = order[j][1] - score;
-					order[j][1] -= score;
-				}
-				
-			}
+		if(bestMove != -1 && playable.remove((byte)bestMove)){
+			playable.addFirst((byte)bestMove);
 		}
-		hash = null;
-		testBoard = null;
-		for(int i = 0; i < order.length; i++){
-			playable.addLast((byte)order[i][0]);
-		}
-		if(order.length != playable.size()){
-			System.out.println("initial size " + size);
-			System.out.print("[");
-			for(int i = 0; i < order.length; i++){
-				System.out.print(order[i][0] + ", ");
-			}
-			System.out.println("] != " + playable.toString());
-		}
-		order = null;
+		
 		int best = MINUSINFINITE;
+		int initialAlpha = alpha;
+		bestMove = -1;
 		size = playable.size();
 		for(int i = 0; i < size; i++){
 			move = playable.pop();
@@ -227,22 +187,25 @@ public class AI {
 				if(score > alpha && score<beta)
 					score = -alphaBeta(depth - 1,testBoard, -beta, -score, player%2+1);
 			}
-			this.addTestedBoardToLookupTable(testBoard.getBoard(), score); 
 			testBoard = null;
 			if(score > best){
 				best = score;
+				bestMove = move;
 				if(best > alpha){
 					alpha = best;
 						if(alpha > beta){
-							this.turn--;
-							this.addTestedBoardToTranspositionTable(board.getBoard(), alpha); 
-							return alpha;
+							break;
 						}
 				}
 			}
 		}
-		this.turn--;
-		this.addTestedBoardToTranspositionTable(board.getBoard(), best);
+		if(best < initialAlpha){
+			this.addTTEntry(board.getBoard(), best,bestMove, depth, player, TTEntry.UPPER);
+		}else if(best > beta){
+			this.addTTEntry(board.getBoard(), best,bestMove, depth, player, TTEntry.LOWER);
+		}else{
+			this.addTTEntry(board.getBoard(), best,bestMove, depth, player, TTEntry.EXACT);
+		}
 		return best;
 	}
 
@@ -251,8 +214,8 @@ public class AI {
 	private  int evaluate(Board oBoard, int player){
 		//mobilityScore represent which player has more move available
 		byte[] board = oBoard.getBoard();
-		int movePlayer = playableSquare(oBoard, player).size();
-		int moveOpponent = playableSquare(oBoard, player%2+1).size();
+		float movePlayer = playableSquare(oBoard, player).size();
+		float moveOpponent = playableSquare(oBoard, player%2+1).size();
 		float mobilityScore = 0;
 		//coinScore represents which player has more coin on the board.
 		//it's actually what determine victory in othello, but it's not that important  
@@ -260,6 +223,11 @@ public class AI {
 		float coinScorePlayer = 0;
 		float coinScoreOpp = 0;
 		float coinScore = 0;
+		//coinScoreWeighted is the same as CoinScore, but every position on the board is weighted
+		//by the position on the board.
+		float coinScoreWeightedPlayer = 0;
+		float coinScoreWeightedOpp = 0;
+		float coinScoreWeighted = 0;		
 		//cornerScore represents which player has corner, corner being a really important square to have
 		//because of it's stability (it can be taken) and because he permits you to take a lot of coin
 		float cornerScore = 0;
@@ -270,26 +238,40 @@ public class AI {
 		float cSquareScore = 0;
 		float cSquareScorePlayer = 0;
 		float cSquareScoreOpp = 0;
+		//cSquareScore represents which player has the square around a corner, when the corner is not taken
+		//having those square is a bad thing as it gives away the corner.
+		float frontierScore = 0;
+		float frontierScorePlayer = 0;
+		float frontierScoreOpp = 0;
 		for(int i = 0; i < board.length; i++){
+			for(int j= -1; j < 1 ; j++){
+				for(int k = -1; k < 1; k++){
+					
+				}
+			}
 			if(board[i] == player){
-					coinScorePlayer += weightedBoard[i];
+					coinScorePlayer++;
+					coinScoreWeightedPlayer += weightedBoard[i];
 					if(i == 0 || i == WIDTH-1
 							|| i == (HEIGHT-1*WIDTH) || i == HEIGHT*WIDTH-1)
 						cornerScorePlayer++;
 			}else if(board[i] != 0){
-					coinScoreOpp += weightedBoard[i];
+					coinScoreOpp++;
+					coinScoreWeightedOpp += weightedBoard[i];
 					if(i == 0 || i == WIDTH-1
 							|| i == (HEIGHT-1*WIDTH) || i == HEIGHT*WIDTH-1)
 						cornerScoreOpp++;
 			}
 		}
-		coinScore = 100*((coinScorePlayer-coinScoreOpp)/(coinScorePlayer+coinScoreOpp));
-		if(turn < 50){
-			if(movePlayer != 0 || moveOpponent != 0 ){
-				if(movePlayer > moveOpponent)
-					mobilityScore = 100*(movePlayer)/(movePlayer + moveOpponent);
-				else if(movePlayer < moveOpponent)
-					mobilityScore = -100*(moveOpponent)/(movePlayer + moveOpponent);
+		if(coinScorePlayer > coinScoreOpp)
+			coinScore = 100*((coinScorePlayer)/(coinScorePlayer+coinScoreOpp));
+		else
+			coinScore = -100*((coinScoreOpp)/(coinScorePlayer+coinScoreOpp));
+		if(countEmptySquare(board) > 12){
+			if(coinScoreWeightedPlayer != 0 || coinScoreWeightedOpp != 0)
+				coinScoreWeighted = 100*(coinScoreWeightedPlayer - coinScoreWeightedOpp)/(coinScoreWeightedPlayer + coinScoreWeightedOpp);
+			if(movePlayer != 0 || moveOpponent != 0){
+					mobilityScore = -100*((movePlayer - moveOpponent)/(movePlayer+moveOpponent));
 			}
 			if(board[0] == 0){
 				if(board[1] == player){
@@ -359,15 +341,27 @@ public class AI {
 					cSquareScoreOpp++;
 				}
 			}
-			cSquareScore = -6.25f*(cSquareScorePlayer-cSquareScoreOpp);
+			cSquareScore = -12.5f*(cSquareScorePlayer-cSquareScoreOpp);
 			cornerScore = 25f*(cornerScorePlayer-cornerScoreOpp);
 		}
 		//score is the final score, it's computed with all the other score, every one of those being weighted
 		//relatively to its actual importance in the strategy.
-		int score =(int) (coefMobility*mobilityScore+coefCoin*coinScore+coefCorner*cornerScore+coefCSquare*cSquareScore);
+		int score =(int) (coefMobility*mobilityScore
+							+coefCoin*coinScore
+							+coefCorner*cornerScore
+							+coefCSquare*cSquareScore
+							+coefWeighted*coinScoreWeighted);
+		
 		return score;
 	}
 	
+	private int countEmptySquare(byte[] board) {
+		int count = 0;
+		for(int i = 0; i < board.length; i++)
+			count += (board[i] == 0 ? 1 : 0);
+		return count;
+	}
+
 	private  Deque<Byte> playableSquare(Board board, int player){
 		Deque<Byte> playable = new ArrayDeque<>();
 		for(int i = 0; i < WIDTH*HEIGHT; i++){
@@ -379,26 +373,6 @@ public class AI {
 	
 
     /*
-        void addTestedBoardToLookupTable(byte[] board, int score)
-        add the score of a board in the lookupTable, also add the rotation & symmetry of this board.
-        EDIT: taking into account the symmetry and rotation of the board was actually highly impacting performance,
-        so I don't add them anymore.             
-        
-        */
-    private  void addTestedBoardToLookupTable(byte[] board, int score){
-        BitSet hash = new BitSet(board.length * 2);
-        for(int i = 0; i<board.length; i++){
-                if(board[i] == 1){
-                        hash.set(i*2);
-                }
-                else if(board[i] == 2){
-                        hash.set(i*2+1);
-                }
-        }
-        lookupTable.put(hash, score);
-    }
-    
-    /*
     void addTestedBoardToTranspositionTable(byte[] board, int score)
     	add a board we already computed the score to the Transposition Table
     	the main difference between transpositionTable and lookupTable, is that transpositionTable is cleared everytime we compute a new depth
@@ -408,7 +382,7 @@ public class AI {
     	( which gives boost in performance as any node might be the child of multiples others nodes).            
     
     */
-    private void addTestedBoardToTranspositionTable(byte[] board, int score){
+    private void addTTEntry(byte[] board, int score, int bestMove, int turn, int player, byte flag){
         BitSet hash = new BitSet(board.length * 2);
         for(int i = 0; i<board.length; i++){
                 if(board[i] == 1){
@@ -418,9 +392,15 @@ public class AI {
                         hash.set(i*2+1);
                 }
         }
-        transpositionTable.put(hash, score);
+        transpositionTable.put(hash, new TTEntry(flag ,score, (byte)bestMove, (byte)turn, (byte)player));
     }
     
+    private static int min(int a, int b){
+    	return (a < b ? a : b);
+    }
     
+    private static int max(int a , int b){
+    	return (a > b ? a : b);
+    }
 	
 }

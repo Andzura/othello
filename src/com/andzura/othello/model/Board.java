@@ -2,6 +2,8 @@
 
 package com.andzura.othello.model;
 
+import com.andzura.othello.utils.Logger;
+
 public class Board {
 	//WHITE  = 1 BLACK = 2
 	private byte[] board;
@@ -167,9 +169,9 @@ public class Board {
 	public void print() {
 		for(int i = 0; i < this.getHeight(); i++){
 			for(int j = 0; j < this.getWidth(); j++){
-				System.out.print(this.getSquareContent(j, i) + " ");
+				Logger.print(this.getSquareContent(j, i) + " ", Logger.INFO);
 			}
-			System.out.println();
+			Logger.println("", Logger.INFO);
 		}
 	}
 	
